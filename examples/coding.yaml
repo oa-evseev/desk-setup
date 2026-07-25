@@ -7,11 +7,13 @@ monitors:
 
       - exec:
           - firefox
+          - --new-window
           - https://app.todoist.com/app/today
         tile: left
 
       - exec:
           - firefox
+          - --new-window
           - https://chatgpt.com
         tile: right
 

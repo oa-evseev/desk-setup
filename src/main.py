@@ -2,31 +2,39 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 from .config import load_config
-
+from .launcher import launch
 
 def cmd_apply(config_path: Path) -> None:
 
     config = load_config(config_path)
 
-    print()
+    print(f"Applying configuration: {config_path}")
     print(f"Version: {config.version}")
     print()
 
     for monitor_name, monitor in config.monitors.items():
 
-        print(f"Monitor: {monitor_name}")
+        print(f"Monitor '{monitor_name}'")
+
+        if not monitor.windows:
+            print("  (no windows)")
+            print()
+            continue
 
         for window in monitor.windows:
 
-            print(f"  exec : {' '.join(window.exec)}")
-            print(f"  cwd  : {window.cwd}")
-            print(f"  tile : {window.tile}")
-            print()
+            command = " ".join(window.exec)
 
-        if not monitor.windows:
-            print("  (empty)")
-            print()
+            print(f"  Launch: {command}")
 
+            if window.cwd is not None:
+                print(f"    cwd : {window.cwd}")
+
+            print(f"    tile: {window.tile}")
+
+        print()
+
+    launch(config)
 
 def main() -> None:
 
