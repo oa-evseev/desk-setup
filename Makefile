@@ -29,6 +29,7 @@ fmt:
 lint:
 
 test:
+	$(PYTHON) -m pytest
 
 clean:
 	find . -name '*.pyc' -delete
