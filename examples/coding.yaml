@@ -1,5 +1,32 @@
 version: 1
 
-applications: []
+monitors:
 
-layout: {}
+  left:
+    windows:
+
+      - exec:
+          - firefox
+          - https://app.todoist.com/app/today
+        tile: left
+
+      - exec:
+          - firefox
+          - https://chatgpt.com
+        tile: right
+
+  center:
+    windows:
+
+      - exec:
+          - kate
+        cwd: ~/projects/desk-setup
+        tile: left
+
+      - exec:
+          - konsole
+        cwd: ~/projects/desk-setup
+        tile: right
+
+  right:
+    windows: []
