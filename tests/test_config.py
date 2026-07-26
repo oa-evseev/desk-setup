@@ -295,6 +295,44 @@ def test_loads_structured_tile_geometry(tmp_path, tile):
     assert window.tile is not None
 
 
+@pytest.mark.parametrize(
+    ("tile", "message"),
+    [
+        ("diagonal", "Unknown tile"),
+        ("[-0.1, 0, 0.5, 1]", "origin must be non-negative"),
+        ("[0, 0, 0, 1]", "width and height must be positive"),
+        ("[0, 0, 1.1, 1]", "fit inside"),
+        (
+            "{x: 0, y: 0, width: 1}",
+            "contain x, y, width and height",
+        ),
+    ],
+)
+def test_rejects_semantically_invalid_tile_before_launch(
+    tmp_path,
+    tile,
+    message,
+):
+    path = write_config(
+        tmp_path,
+        "version: 1\n"
+        "monitors:\n"
+        "  left:\n"
+        "    windows:\n"
+        "      - exec: [kate]\n"
+        f"        tile: {tile}\n",
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=(
+            r"monitors\.left\.windows\[0\]"
+            rf"\.tile.*{message}"
+        ),
+    ):
+        load_config(path)
+
+
 def test_rejects_unknown_fields_with_exact_path(tmp_path):
     path = write_config(
         tmp_path,

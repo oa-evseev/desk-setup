@@ -1,5 +1,4 @@
 from collections.abc import Mapping
-from numbers import Real
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +11,7 @@ from .models import (
     Tile,
     Window,
 )
+from .tiles import TileError, validate_tile
 
 
 SUPPORTED_VERSION = 1
@@ -112,77 +112,17 @@ def _parse_cwd(
     return Path(value).expanduser()
 
 
-def _is_number(value: Any) -> bool:
-    return (
-        isinstance(value, Real)
-        and not isinstance(value, bool)
-    )
-
-
 def _parse_tile(
     value: Any,
     path: str,
 ) -> Tile:
-    if isinstance(value, str):
-        if not value.strip():
-            raise ConfigError(
-                f"{path} must not be empty"
-            )
+    try:
+        return validate_tile(value)
 
-        return value
-
-    if isinstance(value, list):
-        if (
-            len(value) != 4
-            or not all(
-                _is_number(number)
-                for number in value
-            )
-        ):
-            raise ConfigError(
-                f"{path} must contain four numbers"
-            )
-
-        return list(value)
-
-    if isinstance(value, Mapping):
-        fields = {
-            "x",
-            "y",
-            "width",
-            "height",
-        }
-
-        _check_fields(value, fields, path)
-
-        if set(value) != fields:
-            raise ConfigError(
-                f"{path} must contain x, y, "
-                "width and height"
-            )
-
-        if not all(
-            _is_number(value[field])
-            for field in fields
-        ):
-            raise ConfigError(
-                f"{path} values must be numeric"
-            )
-
-        return {
-            field: value[field]
-            for field in (
-                "x",
-                "y",
-                "width",
-                "height",
-            )
-        }
-
-    raise ConfigError(
-        f"{path} must be a preset name "
-        "or four-part geometry"
-    )
+    except TileError as exc:
+        raise ConfigError(
+            f"{path}: {exc}"
+        ) from exc
 
 
 def _parse_command(

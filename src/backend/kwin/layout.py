@@ -1,46 +1,13 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from numbers import Real
 from typing import Any
 
-
-_PRESETS: dict[
-    str,
-    tuple[float, float, float, float],
-] = {
-    "full": (0.0, 0.0, 1.0, 1.0),
-    "max": (0.0, 0.0, 1.0, 1.0),
-    "left": (0.0, 0.0, 0.5, 1.0),
-    "right": (0.5, 0.0, 0.5, 1.0),
-    "top": (0.0, 0.0, 1.0, 0.5),
-    "bottom": (0.0, 0.5, 1.0, 0.5),
-    "top-left": (0.0, 0.0, 0.5, 0.5),
-    "top-right": (0.5, 0.0, 0.5, 0.5),
-    "bottom-left": (0.0, 0.5, 0.5, 0.5),
-    "bottom-right": (0.5, 0.5, 0.5, 0.5),
-}
-
-
-_ALIASES: dict[str, str] = {
-    "fullscreen": "full",
-    "maximized": "full",
-    "maximised": "full",
-    "north": "top",
-    "south": "bottom",
-    "west": "left",
-    "east": "right",
-    "north-west": "top-left",
-    "northwest": "top-left",
-    "nw": "top-left",
-    "north-east": "top-right",
-    "northeast": "top-right",
-    "ne": "top-right",
-    "south-west": "bottom-left",
-    "southwest": "bottom-left",
-    "sw": "bottom-left",
-    "south-east": "bottom-right",
-    "southeast": "bottom-right",
-    "se": "bottom-right",
-}
+from ...models import Tile
+from ...tiles import (
+    geometry_for_tile,
+    get_quick_tile,
+    normalise_name,
+)
 
 
 _MONITOR_ALIASES: dict[str, str] = {
@@ -55,17 +22,6 @@ _MONITOR_ALIASES: dict[str, str] = {
     "rightmost": "right",
     "east": "right",
     "last": "right",
-}
-
-_QUICK_TILE_PRESETS = {
-    "left",
-    "right",
-    "top",
-    "bottom",
-    "top-left",
-    "top-right",
-    "bottom-left",
-    "bottom-right",
 }
 
 def find_output(
@@ -123,10 +79,10 @@ def find_output(
 
 def calculate_geometry(
     output: Mapping[str, Any],
-    tile: Any,
+    tile: Tile,
 ) -> dict[str, int]:
     tile_x, tile_y, tile_width, tile_height = (
-        _normalise_tile(tile)
+        geometry_for_tile(tile)
     )
 
     output_x = _as_int(output, "x")
@@ -168,48 +124,10 @@ def calculate_geometry(
     }
 
 
-def get_quick_tile(
-    tile: Any,
-) -> str | None:
-    """
-    Return a native KWin Quick Tile name when the
-    configured tile is a compatible string preset.
-
-    Explicit mappings, sequences and tile objects
-    remain manually positioned geometries.
-    """
-    if not isinstance(tile, str):
-        return None
-
-    name = (
-        tile
-        .strip()
-        .lower()
-        .replace("_", "-")
-        .replace(" ", "-")
-    )
-
-    name = _ALIASES.get(
-        name,
-        name,
-    )
-
-    if name in _QUICK_TILE_PRESETS:
-        return name
-
-    return None
-
-
 def _normalise_monitor_name(
     monitor_name: str,
 ) -> str | None:
-    name = (
-        monitor_name
-        .strip()
-        .lower()
-        .replace("_", "-")
-        .replace(" ", "-")
-    )
+    name = normalise_name(monitor_name)
 
     return _MONITOR_ALIASES.get(name)
 
@@ -339,137 +257,6 @@ def _output_number(
         )
 
     return value
-
-
-def _normalise_tile(
-    tile: Any,
-) -> tuple[float, float, float, float]:
-    if tile is None:
-        return _PRESETS["full"]
-
-    if isinstance(tile, str):
-        name = (
-            tile
-            .strip()
-            .lower()
-            .replace("_", "-")
-            .replace(" ", "-")
-        )
-
-        name = _ALIASES.get(name, name)
-
-        try:
-            return _PRESETS[name]
-
-        except KeyError as exc:
-            supported = ", ".join(
-                sorted(_PRESETS)
-            )
-
-            raise ValueError(
-                f"Unknown tile {tile!r}; "
-                f"supported presets: {supported}"
-            ) from exc
-
-    if isinstance(tile, Mapping):
-        values = (
-            tile.get("x"),
-            tile.get("y"),
-            tile.get("width"),
-            tile.get("height"),
-        )
-
-        return _validate_tile(
-            values,
-            tile,
-        )
-
-    if (
-        isinstance(tile, Sequence)
-        and not isinstance(
-            tile,
-            (str, bytes, bytearray),
-        )
-        and len(tile) == 4
-    ):
-        return _validate_tile(
-            tuple(tile),
-            tile,
-        )
-
-    attributes = tuple(
-        getattr(
-            tile,
-            name,
-            None,
-        )
-        for name in (
-            "x",
-            "y",
-            "width",
-            "height",
-        )
-    )
-
-    if all(
-        value is not None
-        for value in attributes
-    ):
-        return _validate_tile(
-            attributes,
-            tile,
-        )
-
-    raise TypeError(
-        "tile must be a preset name, "
-        "a four-item sequence, a mapping, "
-        "or an object with x, y, width "
-        "and height attributes"
-    )
-
-
-def _validate_tile(
-    values: tuple[Any, Any, Any, Any],
-    original: Any,
-) -> tuple[float, float, float, float]:
-    if not all(
-        isinstance(value, Real)
-        for value in values
-    ):
-        raise TypeError(
-            "Tile coordinates must be numeric: "
-            f"{original!r}"
-        )
-
-    x, y, width, height = (
-        float(value)
-        for value in values
-    )
-
-    if x < 0.0 or y < 0.0:
-        raise ValueError(
-            "Tile origin must be non-negative: "
-            f"{original!r}"
-        )
-
-    if width <= 0.0 or height <= 0.0:
-        raise ValueError(
-            "Tile width and height must be positive: "
-            f"{original!r}"
-        )
-
-    epsilon = 1e-9
-
-    if (
-        x + width > 1.0 + epsilon
-        or y + height > 1.0 + epsilon
-    ):
-        raise ValueError(
-            "Tile must fit inside the output: "
-            f"{original!r}"
-        )
-
-    return x, y, width, height
 
 
 def _as_int(

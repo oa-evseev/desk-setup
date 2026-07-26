@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import pytest
 
 from src.backend.kwin.layout import (
@@ -53,7 +51,6 @@ def three_outputs():
             "bottom-right",
             {"x": 600, "y": 450, "width": 500, "height": 400},
         ),
-        (None, {"x": 100, "y": 50, "width": 1000, "height": 800}),
     ],
 )
 def test_calculate_geometry_for_presets(tile, expected):
@@ -82,7 +79,6 @@ def test_tile_aliases_are_normalised(tile):
     [
         {"x": 0.25, "y": 0.1, "width": 0.5, "height": 0.75},
         [0.25, 0.1, 0.5, 0.75],
-        (0.25, 0.1, 0.5, 0.75),
     ],
 )
 def test_calculate_geometry_accepts_custom_tiles(tile):
@@ -94,23 +90,6 @@ def test_calculate_geometry_accepts_custom_tiles(tile):
         "width": 500,
         "height": 600,
     }
-
-
-def test_calculate_geometry_accepts_tile_object():
-    @dataclass
-    class Tile:
-        x: float
-        y: float
-        width: float
-        height: float
-
-    result = calculate_geometry(
-        {"x": 0, "y": 0, "width": 300, "height": 200},
-        Tile(0.0, 0.0, 1 / 3, 1.0),
-    )
-
-    assert result == {"x": 0, "y": 0, "width": 100, "height": 200}
-
 
 def test_geometry_uses_edges_to_avoid_rounding_gaps():
     output = {"x": 0, "y": 0, "width": 101, "height": 99}
@@ -126,12 +105,12 @@ def test_geometry_uses_edges_to_avoid_rounding_gaps():
     ("tile", "error"),
     [
         ("diagonal", ValueError),
-        ([0, 0, 1], TypeError),
-        ([0, 0, "wide", 1], TypeError),
+        ([0, 0, 1], ValueError),
+        ([0, 0, "wide", 1], ValueError),
         ([-0.1, 0, 0.5, 1], ValueError),
         ([0, 0, 0, 1], ValueError),
         ([0, 0, 1.1, 1], ValueError),
-        ({"x": 0, "y": 0, "width": 1}, TypeError),
+        ({"x": 0, "y": 0, "width": 1}, ValueError),
     ],
 )
 def test_invalid_tiles_are_rejected(tile, error):
@@ -225,4 +204,3 @@ def test_geometry_rejects_non_numeric_output_dimension():
             {"x": 0, "y": 0, "width": "wide", "height": 100},
             "full",
         )
-
