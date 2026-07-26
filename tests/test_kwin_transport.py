@@ -61,6 +61,11 @@ def test_run_qdbus_builds_command_and_strips_output(monkeypatch):
 
 def test_run_qdbus_translates_timeout(monkeypatch):
     monkeypatch.setattr(
+        client,
+        "_find_qdbus",
+        lambda: "/bin/qdbus6",
+    )
+    monkeypatch.setattr(
         client.subprocess,
         "run",
         Mock(side_effect=subprocess.TimeoutExpired(["qdbus"], 5)),
@@ -87,7 +92,16 @@ def test_run_qdbus_translates_process_failure(
         output=stdout,
         stderr=stderr,
     )
-    monkeypatch.setattr(client.subprocess, "run", Mock(side_effect=error))
+    monkeypatch.setattr(
+        client,
+        "_find_qdbus",
+        lambda: "/bin/qdbus6",
+    )
+    monkeypatch.setattr(
+        client.subprocess,
+        "run",
+        Mock(side_effect=error),
+    )
 
     with pytest.raises(RuntimeError, match=expected):
         client._run_qdbus("service")
