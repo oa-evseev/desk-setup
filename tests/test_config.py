@@ -17,6 +17,7 @@ def test_loads_complete_configuration(tmp_path, monkeypatch):
         tmp_path,
         """
 version: 1
+description: Development workspace
 monitors:
   left:
     windows:
@@ -31,6 +32,7 @@ monitors:
     config = load_config(path)
 
     assert config.version == 1
+    assert config.description == "Development workspace"
     assert list(config.monitors) == ["left", "right"]
     window = config.monitors["left"].windows[0]
     assert window.exec == [
@@ -41,6 +43,32 @@ monitors:
     assert window.cwd == tmp_path / "home" / "projects"
     assert window.tile == "top-left"
     assert config.monitors["right"].windows == []
+
+
+def test_description_defaults_to_none(tmp_path):
+    path = write_config(
+        tmp_path,
+        "version: 1\nmonitors: {}\n",
+    )
+
+    assert load_config(path).description is None
+
+
+@pytest.mark.parametrize(
+    "description",
+    ["42", "[]", '""', '"first\\nsecond"'],
+)
+def test_rejects_invalid_description(tmp_path, description):
+    path = write_config(
+        tmp_path,
+        f"version: 1\ndescription: {description}\nmonitors: {{}}\n",
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="configuration.description",
+    ):
+        load_config(path)
 
 
 def test_windows_defaults_to_empty_list(tmp_path):

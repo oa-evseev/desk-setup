@@ -11,6 +11,14 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+*.egg-info/
+
+# Tests and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # Logs
 *.log

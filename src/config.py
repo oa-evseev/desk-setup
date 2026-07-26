@@ -112,6 +112,26 @@ def _parse_cwd(
     return Path(value).expanduser()
 
 
+def _parse_description(
+    value: Any,
+    path: str,
+) -> str | None:
+    if value is None:
+        return None
+
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or "\n" in value
+        or "\r" in value
+    ):
+        raise ConfigError(
+            f"{path} must be a non-empty single-line string"
+        )
+
+    return value.strip()
+
+
 def _parse_tile(
     value: Any,
     path: str,
@@ -230,7 +250,7 @@ def _parse_config(value: Any) -> Config:
     )
     _check_fields(
         data,
-        {"version", "monitors"},
+        {"version", "description", "monitors"},
         "configuration",
     )
 
@@ -275,6 +295,10 @@ def _parse_config(value: Any) -> Config:
     return Config(
         version=version,
         monitors=monitors,
+        description=_parse_description(
+            data.get("description"),
+            "configuration.description",
+        ),
     )
 
 

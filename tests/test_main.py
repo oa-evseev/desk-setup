@@ -14,7 +14,12 @@ from src.models import Config, Monitor, Window
 def test_list_does_not_require_qdbus(tmp_path):
     config_dir = tmp_path / "config" / "desk-setup"
     config_dir.mkdir(parents=True)
-    (config_dir / "coding.yaml").write_text("", encoding="utf-8")
+    (config_dir / "coding.yaml").write_text(
+        "version: 1\n"
+        "description: Daily workspace\n"
+        "monitors: {}\n",
+        encoding="utf-8",
+    )
     environment = os.environ.copy()
     environment["PATH"] = str(tmp_path / "empty-bin")
     environment["XDG_CONFIG_HOME"] = str(tmp_path / "config")
@@ -28,7 +33,10 @@ def test_list_does_not_require_qdbus(tmp_path):
         text=True,
     )
 
-    assert result.stdout == "coding\n"
+    assert result.stdout == (
+        f"Configurations in {config_dir}:\n"
+        "  coding  Daily workspace\n"
+    )
 
 
 def test_config_directory_uses_xdg_override(monkeypatch, tmp_path):
@@ -127,15 +135,76 @@ def test_main_list_prints_sorted_configuration_names(
 ):
     config_dir = tmp_path / "desk-setup"
     config_dir.mkdir()
-    (config_dir / "work.yaml").write_text("", encoding="utf-8")
-    (config_dir / "coding.yaml").write_text("", encoding="utf-8")
+    (config_dir / "work.yaml").write_text(
+        "version: 1\nmonitors: {}\n",
+        encoding="utf-8",
+    )
+    (config_dir / "coding.yaml").write_text(
+        "version: 1\n"
+        "description: Development workspace\n"
+        "monitors: {}\n",
+        encoding="utf-8",
+    )
     (config_dir / "notes.txt").write_text("", encoding="utf-8")
     monkeypatch.setattr(main, "config_directory", lambda: config_dir)
     monkeypatch.setattr("sys.argv", ["desk-setup", "list"])
 
     main.main()
 
-    assert capsys.readouterr().out.splitlines() == ["coding", "work"]
+    assert capsys.readouterr().out.splitlines() == [
+        f"Configurations in {config_dir}:",
+        "  coding  Development workspace",
+        "  work",
+    ]
+
+
+def test_main_list_marks_invalid_config_without_hiding_others(
+    capsys,
+    monkeypatch,
+    tmp_path,
+):
+    config_dir = tmp_path / "desk-setup"
+    config_dir.mkdir()
+    (config_dir / "broken.yaml").write_text("not: valid\n", encoding="utf-8")
+    (config_dir / "coding.yaml").write_text(
+        "version: 1\nmonitors: {}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main, "config_directory", lambda: config_dir)
+    monkeypatch.setattr("sys.argv", ["desk-setup", "list"])
+
+    main.main()
+
+    assert capsys.readouterr().out.splitlines() == [
+        f"Configurations in {config_dir}:",
+        "  broken  [invalid configuration]",
+        "  coding",
+    ]
+
+
+def test_main_list_adds_colors_for_terminal_output(
+    capsys,
+    monkeypatch,
+    tmp_path,
+):
+    config_dir = tmp_path / "desk-setup"
+    config_dir.mkdir()
+    (config_dir / "coding.yaml").write_text(
+        "version: 1\n"
+        "description: Development workspace\n"
+        "monitors: {}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main, "config_directory", lambda: config_dir)
+    monkeypatch.setattr(main, "_use_color", lambda: True)
+    monkeypatch.setattr("sys.argv", ["desk-setup", "list"])
+
+    main.main()
+
+    output = capsys.readouterr().out
+    assert f"\033[1;34m{config_dir}\033[0m" in output
+    assert "\033[1;36mcoding\033[0m" in output
+    assert "Development workspace" in output
 
 
 def test_main_list_handles_missing_configuration_directory(
@@ -152,7 +221,10 @@ def test_main_list_handles_missing_configuration_directory(
 
     main.main()
 
-    assert capsys.readouterr().out == "No configurations found.\n"
+    assert capsys.readouterr().out == (
+        f"Configurations in {tmp_path / 'missing'}:\n"
+        "  No configurations found.\n"
+    )
 
 
 def test_main_without_command_prints_help(capsys, monkeypatch):
@@ -163,6 +235,23 @@ def test_main_without_command_prints_help(capsys, monkeypatch):
     output = capsys.readouterr().out
     assert "usage:" in output
     assert "apply" in output
+
+
+def test_main_help_describes_common_commands_and_links_project(
+    capsys,
+    monkeypatch,
+):
+    apply = Mock()
+    monkeypatch.setattr(main, "cmd_apply", apply)
+    monkeypatch.setattr("sys.argv", ["desk-setup", "help"])
+
+    main.main()
+
+    output = capsys.readouterr().out
+    assert "desk-setup coding" in output
+    assert "desk-setup list" in output
+    assert "https://github.com/oa-evseev/desk-setup" in output
+    apply.assert_not_called()
 
 
 def test_main_reports_configuration_error_without_traceback(

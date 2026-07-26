@@ -39,6 +39,6 @@ jobs:
       - name: Check source files
         run: |
           python -m compileall -q src tests
-          bash -n install.sh uninstall.sh
-          shellcheck install.sh uninstall.sh
+          bash -n install.sh uninstall.sh completions/desk-setup
+          shellcheck install.sh uninstall.sh completions/desk-setup
           node --check src/backend/kwin/runtime.js

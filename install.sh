@@ -15,6 +15,8 @@ BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
 APP_DIR="$DATA_HOME/desk-setup"
 CONFIG_DIR="$CONFIG_HOME/desk-setup"
 WRAPPER="$BIN_HOME/desk-setup"
+COMPLETION_DIR="$DATA_HOME/bash-completion/completions"
+COMPLETION="$COMPLETION_DIR/desk-setup"
 
 
 require_command() {
@@ -41,7 +43,11 @@ if ! command -v qdbus6 >/dev/null 2>&1 \
     exit 1
 fi
 
-mkdir -p "$DATA_HOME" "$CONFIG_DIR" "$BIN_HOME"
+mkdir -p \
+    "$DATA_HOME" \
+    "$CONFIG_DIR" \
+    "$BIN_HOME" \
+    "$COMPLETION_DIR"
 
 STAGING_DIR="$(
     mktemp -d "$DATA_HOME/.desk-setup-install.XXXXXX"
@@ -97,22 +103,36 @@ printf 'exec %q -m src.main "$@"\n' \
 chmod 755 "$WRAPPER_TEMP"
 mv -- "$WRAPPER_TEMP" "$WRAPPER"
 
-for example in "$SCRIPT_DIR"/examples/*.yaml; do
-    destination="$CONFIG_DIR/$(basename -- "$example")"
+COMPLETION_TEMP="${COMPLETION}.tmp.$$"
+cp -- "$SCRIPT_DIR/completions/desk-setup" "$COMPLETION_TEMP"
+chmod 644 "$COMPLETION_TEMP"
+mv -- "$COMPLETION_TEMP" "$COMPLETION"
 
-    if [[ ! -e "$destination" ]]; then
-        cp -- "$example" "$destination"
-        echo "Created configuration: $destination"
-    else
-        echo "Preserved configuration: $destination"
+HAS_CONFIG=false
+
+for config in "$CONFIG_DIR"/*.yaml; do
+    if [[ -e "$config" ]]; then
+        HAS_CONFIG=true
+        break
     fi
 done
+
+if [[ "$HAS_CONFIG" == false ]]; then
+    for example in "$SCRIPT_DIR"/examples/*.yaml; do
+        destination="$CONFIG_DIR/$(basename -- "$example")"
+        cp -- "$example" "$destination"
+        echo "Created configuration: $destination"
+    done
+else
+    echo "Existing configurations found; skipped examples."
+fi
 
 echo
 echo "Installation complete."
 echo "Application: $APP_DIR"
 echo "Command:     $WRAPPER"
 echo "Configs:     $CONFIG_DIR"
+echo "Completion:  $COMPLETION"
 
 case ":$PATH:" in
     *":$BIN_HOME:"*)

@@ -1,0 +1,38 @@
+# shellcheck shell=bash
+
+_desk_setup()
+{
+    local current="${COMP_WORDS[COMP_CWORD]}"
+    local candidate
+    local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+    local config_dir="$config_home/desk-setup"
+    local path
+    local -a configs=()
+    local -a candidates=()
+
+    for path in "$config_dir"/*.yaml; do
+        [[ -e "$path" ]] || continue
+        configs+=("$(basename -- "$path" .yaml)")
+    done
+
+    case "$COMP_CWORD" in
+        1)
+            candidates=("${configs[@]}" "help" "list")
+            ;;
+        2)
+            if [[ "${COMP_WORDS[1]}" == "apply" ]]; then
+                candidates=("${configs[@]}")
+            fi
+            ;;
+    esac
+
+    COMPREPLY=()
+
+    for candidate in "${candidates[@]}"; do
+        if [[ "$candidate" == "$current"* ]]; then
+            COMPREPLY+=("$candidate")
+        fi
+    done
+}
+
+complete -F _desk_setup desk-setup

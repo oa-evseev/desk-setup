@@ -35,3 +35,4 @@ class Monitor:
 class Config:
     version: int
     monitors: dict[str, Monitor]
+    description: str | None = None

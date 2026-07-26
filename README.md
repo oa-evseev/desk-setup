@@ -29,7 +29,8 @@ No `sudo` is required. The installer creates:
 - the application and its virtual environment in
   `~/.local/share/desk-setup`;
 - the `desk-setup` command in `~/.local/bin`;
-- editable configurations in `~/.config/desk-setup`.
+- editable configurations in `~/.config/desk-setup`;
+- Bash completion for commands and configuration names.
 
 Existing configurations are preserved when the installer is run again.
 To update the installed application:
@@ -49,6 +50,12 @@ List the installed configurations:
 desk-setup list
 ```
 
+Show the built-in help and project link:
+
+```sh
+desk-setup help
+```
+
 Apply one by name:
 
 ```sh
@@ -62,10 +69,14 @@ desk-setup apply coding
 desk-setup ~/my-desk.yaml
 ```
 
+In a new Bash session, press Tab after `desk-setup` or
+`desk-setup apply` to complete commands and configuration names.
+
 A configuration describes which applications belong on each monitor:
 
 ```yaml
 version: 1
+description: Development workspace
 
 monitors:
   left:
@@ -86,6 +97,9 @@ monitors:
         cwd: ~/projects
         tile: right
 ```
+
+The top-level `description` is optional and is shown by
+`desk-setup list`.
 
 Each window supports:
 

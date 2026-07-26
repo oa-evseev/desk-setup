@@ -34,6 +34,7 @@ BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
 APP_DIR="$DATA_HOME/desk-setup"
 CONFIG_DIR="$CONFIG_HOME/desk-setup"
 WRAPPER="$BIN_HOME/desk-setup"
+COMPLETION="$DATA_HOME/bash-completion/completions/desk-setup"
 
 if [[ -e "$APP_DIR" ]]; then
     rm -rf -- "$APP_DIR"
@@ -45,6 +46,11 @@ fi
 if [[ -e "$WRAPPER" || -L "$WRAPPER" ]]; then
     rm -- "$WRAPPER"
     echo "Removed command: $WRAPPER"
+fi
+
+if [[ -e "$COMPLETION" || -L "$COMPLETION" ]]; then
+    rm -- "$COMPLETION"
+    echo "Removed Bash completion: $COMPLETION"
 fi
 
 if [[ "$PURGE" == true ]]; then
