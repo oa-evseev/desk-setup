@@ -10,11 +10,14 @@ monitors:
           - --new-window
           - https://app.todoist.com/app/today
         tile: left
+        after:
+          - exec:
+              - firefox
+              - --new-tab
+              - https://chatgpt.com
 
       - exec:
-          - firefox
-          - --new-window
-          - https://chatgpt.com
+          - konsole
         tile: right
 
   center:

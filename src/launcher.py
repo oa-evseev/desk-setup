@@ -134,6 +134,19 @@ def launch_window(
         monitor_name,
     )
 
+    for command in window.after:
+
+        subprocess.Popen(
+            command.exec,
+            cwd=(
+                command.cwd
+                if command.cwd is not None
+                else window.cwd
+            ),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
+        )
+
 
 def launch(config) -> None:
 

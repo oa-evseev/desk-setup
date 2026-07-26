@@ -4,7 +4,7 @@ from unittest.mock import Mock, call
 import pytest
 
 from src import launcher
-from src.models import Config, Monitor, Window
+from src.models import Command, Config, Monitor, Window
 
 
 def test_window_handles_ignores_empty_and_missing_handles():
@@ -128,6 +128,107 @@ def test_launch_window_starts_and_arranges_application(monkeypatch, tmp_path):
     arrange.assert_called_once_with("window-7", window, "center")
 
 
+def test_launch_window_runs_after_commands_only_after_arranging(
+    monkeypatch,
+    tmp_path,
+):
+    window = Window(
+        exec=["firefox", "--new-window", "https://todoist.com"],
+        cwd=tmp_path,
+        tile="left",
+        after=[
+            Command(
+                ["firefox", "--new-tab", "https://chatgpt.com"],
+                None,
+            ),
+            Command(["notify-send", "ready"], tmp_path / "scripts"),
+        ],
+    )
+    process = SimpleNamespace(pid=321)
+    events = []
+
+    monkeypatch.setattr(
+        launcher,
+        "list_windows",
+        Mock(
+            side_effect=lambda: (
+                events.append("list")
+                or [{"handle": "existing"}]
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        launcher.subprocess,
+        "Popen",
+        Mock(
+            side_effect=lambda *args, **kwargs: (
+                events.append(("popen", args, kwargs))
+                or process
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "_wait_for_window",
+        Mock(
+            side_effect=lambda *args: (
+                events.append("wait")
+                or "window-7"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "arrange_window",
+        Mock(
+            side_effect=lambda *args: events.append("arrange")
+        ),
+    )
+
+    launcher.launch_window(window, "left")
+
+    assert events[0:4] == ["list", events[1], "wait", "arrange"]
+    assert events[1][0] == "popen"
+    assert events[4][0] == "popen"
+    assert events[4][1] == (
+        ["firefox", "--new-tab", "https://chatgpt.com"],
+    )
+    assert events[4][2]["cwd"] == tmp_path
+    assert events[5][0] == "popen"
+    assert events[5][1] == (["notify-send", "ready"],)
+    assert events[5][2]["cwd"] == tmp_path / "scripts"
+    for event in (events[4], events[5]):
+        assert event[2]["stdout"] is launcher.subprocess.DEVNULL
+        assert event[2]["stderr"] is launcher.subprocess.STDOUT
+
+
+def test_after_command_is_not_run_when_arranging_fails(monkeypatch):
+    window = Window(
+        ["firefox"],
+        None,
+        "left",
+        after=[Command(["firefox", "--new-tab", "url"], None)],
+    )
+    popen = Mock(return_value=SimpleNamespace(pid=1))
+    monkeypatch.setattr(launcher, "list_windows", Mock(return_value=[]))
+    monkeypatch.setattr(launcher.subprocess, "Popen", popen)
+    monkeypatch.setattr(
+        launcher,
+        "_wait_for_window",
+        Mock(return_value="window"),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "arrange_window",
+        Mock(side_effect=RuntimeError("cannot arrange")),
+    )
+
+    with pytest.raises(RuntimeError, match="cannot arrange"):
+        launcher.launch_window(window, "left")
+
+    assert popen.call_count == 1
+
+
 def test_launch_visits_monitors_and_windows_in_configuration_order(monkeypatch):
     first = Window(["one"], None, "left")
     second = Window(["two"], None, "right")
@@ -150,4 +251,3 @@ def test_launch_visits_monitors_and_windows_in_configuration_order(monkeypatch):
         call(second, "left"),
         call(third, "right"),
     ]
-

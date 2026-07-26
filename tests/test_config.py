@@ -72,6 +72,76 @@ monitors:
     assert window.cwd is None
 
 
+def test_loads_after_commands_and_expands_their_working_directories(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    path = write_config(
+        tmp_path,
+        """
+version: 1
+monitors:
+  left:
+    windows:
+      - exec: [firefox, --new-window, "https://example.com"]
+        cwd: /workspace
+        tile: left
+        after:
+          - exec: [firefox, --new-tab, "https://chatgpt.com"]
+          - exec: [notify-send, ready]
+            cwd: ~/scripts
+""",
+    )
+
+    window = load_config(path).monitors["left"].windows[0]
+
+    assert [command.exec for command in window.after] == [
+        ["firefox", "--new-tab", "https://chatgpt.com"],
+        ["notify-send", "ready"],
+    ]
+    assert window.after[0].cwd is None
+    assert window.after[1].cwd == tmp_path / "home" / "scripts"
+
+
+def test_after_defaults_to_empty_list(tmp_path):
+    path = write_config(
+        tmp_path,
+        """
+version: 1
+monitors:
+  center:
+    windows:
+      - exec: [kate]
+        tile: full
+""",
+    )
+
+    window = load_config(path).monitors["center"].windows[0]
+
+    assert window.after == []
+
+
+@pytest.mark.parametrize("missing_key", ["exec"])
+def test_after_command_requires_exec(tmp_path, missing_key):
+    path = write_config(
+        tmp_path,
+        """
+version: 1
+monitors:
+  center:
+    windows:
+      - exec: [kate]
+        tile: full
+        after:
+          - cwd: /tmp
+""",
+    )
+
+    with pytest.raises(KeyError, match=missing_key):
+        load_config(path)
+
+
 @pytest.mark.parametrize(
     "content",
     [
@@ -141,4 +211,3 @@ def test_yaml_syntax_error_is_propagated(tmp_path):
 def test_missing_file_is_reported_by_pathlib(tmp_path):
     with pytest.raises(FileNotFoundError):
         load_config(tmp_path / "missing.yaml")
-

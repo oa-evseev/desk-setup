@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from .models import Config, Monitor, Window
+from .models import Command, Config, Monitor, Window
 
 
 SUPPORTED_VERSION = 1
@@ -33,11 +33,29 @@ def load_config(path: Path) -> Config:
 
             cwd = window.get("cwd")
 
+            after: list[Command] = []
+
+            for command in window.get("after", []):
+
+                command_cwd = command.get("cwd")
+
+                after.append(
+                    Command(
+                        exec=list(command["exec"]),
+                        cwd=(
+                            Path(command_cwd).expanduser()
+                            if command_cwd
+                            else None
+                        ),
+                    )
+                )
+
             windows.append(
                 Window(
                     exec=list(window["exec"]),
                     cwd=Path(cwd).expanduser() if cwd else None,
                     tile=window["tile"],
+                    after=after,
                 )
             )
 
