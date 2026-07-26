@@ -1,8 +1,61 @@
 from argparse import ArgumentParser
+import os
 from pathlib import Path
+import sys
 
 from .config import load_config
 from .launcher import launch
+
+
+def config_directory() -> Path:
+
+    config_home = os.environ.get(
+        "XDG_CONFIG_HOME",
+    )
+
+    if config_home:
+        return Path(config_home) / "desk-setup"
+
+    return (
+        Path.home()
+        / ".config"
+        / "desk-setup"
+    )
+
+
+def resolve_config_path(path: Path) -> Path:
+
+    if (
+        path.is_absolute()
+        or path.parent != Path(".")
+    ):
+        return path
+
+    name = path.name
+
+    if not name.endswith(".yaml"):
+        name = f"{name}.yaml"
+
+    return config_directory() / name
+
+
+def cmd_list() -> None:
+
+    directory = config_directory()
+
+    configs = (
+        sorted(directory.glob("*.yaml"))
+        if directory.is_dir()
+        else []
+    )
+
+    if not configs:
+        print("No configurations found.")
+        return
+
+    for config in configs:
+        print(config.stem)
+
 
 def cmd_apply(config_path: Path) -> None:
 
@@ -38,19 +91,43 @@ def cmd_apply(config_path: Path) -> None:
 
 def main() -> None:
 
-    parser = ArgumentParser()
+    parser = ArgumentParser(
+        prog="desk-setup",
+    )
 
     subparsers = parser.add_subparsers(dest="command")
 
     apply_parser = subparsers.add_parser("apply")
     apply_parser.add_argument("config", type=Path)
 
-    args = parser.parse_args()
+    subparsers.add_parser("list")
+
+    arguments = sys.argv[1:]
+
+    if (
+        arguments
+        and not arguments[0].startswith("-")
+        and arguments[0] not in {
+            "apply",
+            "list",
+        }
+    ):
+        arguments = [
+            "apply",
+            *arguments,
+        ]
+
+    args = parser.parse_args(arguments)
 
     match args.command:
 
         case "apply":
-            cmd_apply(args.config)
+            cmd_apply(
+                resolve_config_path(args.config)
+            )
+
+        case "list":
+            cmd_list()
 
         case _:
             parser.print_help()

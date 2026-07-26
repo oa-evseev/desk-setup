@@ -1,4 +1,4 @@
-.PHONY: help env install run fmt lint test clean
+.PHONY: help env install install-dev run fmt lint test clean
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -8,6 +8,7 @@ PIP := $(VENV)/bin/pip
 
 help:
 	@echo "Available targets:"
+	@echo "  env    Create a development environment"
 	@echo "  fmt    Format source code"
 	@echo "  lint   Run linters"
 	@echo "  test   Run tests"
@@ -16,10 +17,13 @@ help:
 env:
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
-	$(MAKE) install
+	$(MAKE) install-dev
 
 install:
 	$(PIP) install -r requirements.txt
+
+install-dev:
+	$(PIP) install -r requirements-dev.txt
 
 run:
 	$(PYTHON) -m src.main $(ARGS)
