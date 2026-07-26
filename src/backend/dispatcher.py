@@ -1,8 +1,10 @@
 import os
 from typing import Any
 
+from .types import WindowInfo
 
-def list_windows() -> list[dict[str, Any]]:
+
+def list_windows() -> list[WindowInfo]:
 
     wm = detect_window_manager()
 

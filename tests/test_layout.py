@@ -5,35 +5,49 @@ from src.backend.kwin.layout import (
     find_output,
     get_quick_tile,
 )
+from src.backend.types import OutputInfo
+
+
+def output_info(
+    *,
+    name: str = "output",
+    x: float = 0,
+    y: float = 0,
+    width: float = 100,
+    height: float = 100,
+    enabled: bool = True,
+) -> OutputInfo:
+    return OutputInfo(
+        name=name,
+        x=x,
+        y=y,
+        width=width,
+        height=height,
+        enabled=enabled,
+    )
 
 
 @pytest.fixture
 def three_outputs():
     return [
-        {
-            "name": "DP-1",
-            "x": -1920,
-            "y": 0,
-            "width": 1920,
-            "height": 1080,
-            "enabled": True,
-        },
-        {
-            "name": "HDMI-A-1",
-            "x": 0,
-            "y": -120,
-            "width": 2560,
-            "height": 1440,
-            "enabled": True,
-        },
-        {
-            "name": "DP-2",
-            "x": 2560,
-            "y": 0,
-            "width": 1920,
-            "height": 1080,
-            "enabled": True,
-        },
+        output_info(
+            name="DP-1",
+            x=-1920,
+            width=1920,
+            height=1080,
+        ),
+        output_info(
+            name="HDMI-A-1",
+            y=-120,
+            width=2560,
+            height=1440,
+        ),
+        output_info(
+            name="DP-2",
+            x=2560,
+            width=1920,
+            height=1080,
+        ),
     ]
 
 
@@ -54,7 +68,12 @@ def three_outputs():
     ],
 )
 def test_calculate_geometry_for_presets(tile, expected):
-    output = {"x": 100, "y": 50, "width": 1000, "height": 800}
+    output = output_info(
+        x=100,
+        y=50,
+        width=1000,
+        height=800,
+    )
 
     assert calculate_geometry(output, tile) == expected
 
@@ -64,7 +83,10 @@ def test_calculate_geometry_for_presets(tile, expected):
     ["TOP LEFT", "top_left", "north-west", "northwest", "nw"],
 )
 def test_tile_aliases_are_normalised(tile):
-    output = {"x": 0, "y": 0, "width": 1200, "height": 800}
+    output = output_info(
+        width=1200,
+        height=800,
+    )
 
     assert calculate_geometry(output, tile) == {
         "x": 0,
@@ -82,7 +104,12 @@ def test_tile_aliases_are_normalised(tile):
     ],
 )
 def test_calculate_geometry_accepts_custom_tiles(tile):
-    output = {"x": -100, "y": 20, "width": 1000, "height": 800}
+    output = output_info(
+        x=-100,
+        y=20,
+        width=1000,
+        height=800,
+    )
 
     assert calculate_geometry(output, tile) == {
         "x": 150,
@@ -92,7 +119,10 @@ def test_calculate_geometry_accepts_custom_tiles(tile):
     }
 
 def test_geometry_uses_edges_to_avoid_rounding_gaps():
-    output = {"x": 0, "y": 0, "width": 101, "height": 99}
+    output = output_info(
+        width=101,
+        height=99,
+    )
 
     left = calculate_geometry(output, [0, 0, 0.5, 1])
     right = calculate_geometry(output, [0.5, 0, 0.5, 1])
@@ -116,7 +146,7 @@ def test_geometry_uses_edges_to_avoid_rounding_gaps():
 def test_invalid_tiles_are_rejected(tile, error):
     with pytest.raises(error):
         calculate_geometry(
-            {"x": 0, "y": 0, "width": 100, "height": 100},
+            output_info(),
             tile,
         )
 
@@ -138,11 +168,11 @@ def test_get_quick_tile(tile, expected):
 
 
 def test_find_output_prefers_exact_physical_name(three_outputs):
-    assert find_output(three_outputs, "DP-2")["name"] == "DP-2"
+    assert find_output(three_outputs, "DP-2").name == "DP-2"
 
 
 def test_find_output_matches_physical_name_case_insensitively(three_outputs):
-    assert find_output(three_outputs, "hdmi-a-1")["name"] == "HDMI-A-1"
+    assert find_output(three_outputs, "hdmi-a-1").name == "HDMI-A-1"
 
 
 @pytest.mark.parametrize(
@@ -157,17 +187,20 @@ def test_find_output_matches_physical_name_case_insensitively(three_outputs):
     ],
 )
 def test_find_output_resolves_logical_names(three_outputs, name, expected):
-    assert find_output(three_outputs, name)["name"] == expected
+    assert find_output(three_outputs, name).name == expected
 
 
 def test_disabled_outputs_are_ignored():
     outputs = [
-        {"name": "off", "x": -100, "y": 0, "width": 100, "height": 100,
-         "enabled": False},
-        {"name": "on", "x": 0, "y": 0, "width": 100, "height": 100},
+        output_info(
+            name="off",
+            x=-100,
+            enabled=False,
+        ),
+        output_info(name="on"),
     ]
 
-    assert find_output(outputs, "left")["name"] == "on"
+    assert find_output(outputs, "left").name == "on"
 
 
 def test_find_output_reports_available_names(three_outputs):
@@ -184,23 +217,11 @@ def test_find_output_reports_available_names(three_outputs):
 def test_find_output_rejects_empty_enabled_set():
     with pytest.raises(RuntimeError, match="no enabled outputs"):
         find_output(
-            [{"name": "DP-1", "enabled": False}],
+            [
+                output_info(
+                    name="DP-1",
+                    enabled=False,
+                )
+            ],
             "left",
-        )
-
-
-@pytest.mark.parametrize("key", ["x", "y", "width", "height"])
-def test_geometry_requires_all_output_dimensions(key):
-    output = {"x": 0, "y": 0, "width": 100, "height": 100}
-    del output[key]
-
-    with pytest.raises(RuntimeError, match=f"missing '{key}'"):
-        calculate_geometry(output, "full")
-
-
-def test_geometry_rejects_non_numeric_output_dimension():
-    with pytest.raises(RuntimeError, match="is not numeric"):
-        calculate_geometry(
-            {"x": 0, "y": 0, "width": "wide", "height": 100},
-            "full",
         )

@@ -1,12 +1,12 @@
 from pathlib import Path
 import subprocess
 import time
-from typing import Any
 
 from .backend import (
     arrange_window,
     list_windows,
 )
+from .backend.types import WindowInfo
 from .models import Config, Window
 
 
@@ -15,29 +15,23 @@ _POLL_INTERVAL = 0.1
 
 
 def _window_handles(
-    windows: list[dict[str, Any]],
+    windows: list[WindowInfo],
 ) -> set[str]:
 
     return {
-        str(window["handle"])
+        window.handle
         for window in windows
-        if window.get("handle")
     }
 
 
 def _new_window_handle(
-    windows: list[dict[str, Any]],
+    windows: list[WindowInfo],
     previous_handles: set[str],
 ) -> str:
 
     for window in reversed(windows):
 
-        handle = str(
-            window.get(
-                "handle",
-                "",
-            )
-        )
+        handle = window.handle
 
         if (
             handle
@@ -49,16 +43,14 @@ def _new_window_handle(
 
 
 def _window_handle_for_pid(
-    windows: list[dict[str, Any]],
+    windows: list[WindowInfo],
     pid: int,
 ) -> str:
 
     for window in windows:
 
-        if window.get("pid") == pid:
-            return str(
-                window.get("handle", "")
-            )
+        if window.pid == pid:
+            return window.handle
 
     return ""
 

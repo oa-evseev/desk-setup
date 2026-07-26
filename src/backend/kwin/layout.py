@@ -1,7 +1,4 @@
-from collections.abc import Mapping
-from numbers import Real
-from typing import Any
-
+from ..types import OutputInfo
 from ...models import Tile
 from ...tiles import (
     geometry_for_tile,
@@ -25,13 +22,13 @@ _MONITOR_ALIASES: dict[str, str] = {
 }
 
 def find_output(
-    outputs: list[dict[str, Any]],
+    outputs: list[OutputInfo],
     monitor_name: str,
-) -> dict[str, Any]:
+) -> OutputInfo:
     enabled_outputs = [
         output
         for output in outputs
-        if output.get("enabled", True) is not False
+        if output.enabled
     ]
 
     if not enabled_outputs:
@@ -42,14 +39,14 @@ def find_output(
     requested_name = str(monitor_name).strip()
 
     for output in enabled_outputs:
-        if str(output.get("name", "")) == requested_name:
+        if output.name == requested_name:
             return output
 
     requested_name_lower = requested_name.lower()
 
     for output in enabled_outputs:
         if (
-            str(output.get("name", "")).lower()
+            output.name.lower()
             == requested_name_lower
         ):
             return output
@@ -66,7 +63,7 @@ def find_output(
 
     available = ", ".join(
         sorted(
-            str(output.get("name", ""))
+            output.name
             for output in enabled_outputs
         )
     )
@@ -78,17 +75,17 @@ def find_output(
 
 
 def calculate_geometry(
-    output: Mapping[str, Any],
+    output: OutputInfo,
     tile: Tile,
 ) -> dict[str, int]:
     tile_x, tile_y, tile_width, tile_height = (
         geometry_for_tile(tile)
     )
 
-    output_x = _as_int(output, "x")
-    output_y = _as_int(output, "y")
-    output_width = _as_int(output, "width")
-    output_height = _as_int(output, "height")
+    output_x = round(output.x)
+    output_y = round(output.y)
+    output_width = round(output.width)
+    output_height = round(output.height)
 
     left = (
         output_x
@@ -133,9 +130,9 @@ def _normalise_monitor_name(
 
 
 def _find_logical_output(
-    outputs: list[dict[str, Any]],
+    outputs: list[OutputInfo],
     logical_name: str,
-) -> dict[str, Any]:
+) -> OutputInfo:
     ordered = sorted(
         outputs,
         key=_output_sort_key,
@@ -157,8 +154,8 @@ def _find_logical_output(
 
 
 def _find_center_output(
-    outputs: list[dict[str, Any]],
-) -> dict[str, Any]:
+    outputs: list[OutputInfo],
+) -> OutputInfo:
     if len(outputs) == 1:
         return outputs[0]
 
@@ -185,86 +182,48 @@ def _find_center_output(
             ),
             _output_center_x(output),
             _output_center_y(output),
-            str(output.get("name", "")),
+            output.name,
         ),
     )
 
 
 def _output_sort_key(
-    output: Mapping[str, Any],
+    output: OutputInfo,
 ) -> tuple[float, float, str]:
     return (
         _output_center_x(output),
         _output_center_y(output),
-        str(output.get("name", "")),
+        output.name,
     )
 
 
 def _output_left(
-    output: Mapping[str, Any],
+    output: OutputInfo,
 ) -> float:
-    return float(
-        _output_number(output, "x")
-    )
+    return output.x
 
 
 def _output_right(
-    output: Mapping[str, Any],
+    output: OutputInfo,
 ) -> float:
-    return (
-        float(_output_number(output, "x"))
-        + float(_output_number(output, "width"))
-    )
+    return output.x + output.width
 
 
 def _output_center_x(
-    output: Mapping[str, Any],
+    output: OutputInfo,
 ) -> float:
     return (
-        float(_output_number(output, "x"))
-        + float(_output_number(output, "width"))
+        output.x
+        + output.width
         / 2.0
     )
 
 
 def _output_center_y(
-    output: Mapping[str, Any],
+    output: OutputInfo,
 ) -> float:
     return (
-        float(_output_number(output, "y"))
-        + float(_output_number(output, "height"))
+        output.y
+        + output.height
         / 2.0
-    )
-
-
-def _output_number(
-    output: Mapping[str, Any],
-    key: str,
-) -> Real:
-    try:
-        value = output[key]
-
-    except KeyError as exc:
-        raise RuntimeError(
-            f"KWin output is missing {key!r}: "
-            f"{dict(output)!r}"
-        ) from exc
-
-    if not isinstance(value, Real):
-        raise RuntimeError(
-            f"KWin output field {key!r} "
-            f"is not numeric: {value!r}"
-        )
-
-    return value
-
-
-def _as_int(
-    output: Mapping[str, Any],
-    key: str,
-) -> int:
-    return round(
-        float(
-            _output_number(output, key)
-        )
     )

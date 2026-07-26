@@ -4,26 +4,34 @@ from unittest.mock import Mock, call
 import pytest
 
 from src import launcher
+from src.backend.types import WindowInfo
 from src.models import Command, Config, Monitor, Window
 
 
-def test_window_handles_ignores_empty_and_missing_handles():
+def window_info(
+    handle: str,
+    pid: int = 0,
+) -> WindowInfo:
+    return WindowInfo(
+        handle=handle,
+        pid=pid,
+    )
+
+
+def test_window_handles_returns_all_handles():
     windows = [
-        {"handle": "a"},
-        {"handle": 42},
-        {"handle": ""},
-        {"title": "no handle"},
-        {"handle": None},
+        window_info("a"),
+        window_info("b"),
     ]
 
-    assert launcher._window_handles(windows) == {"a", "42"}
+    assert launcher._window_handles(windows) == {"a", "b"}
 
 
 def test_new_window_handle_returns_last_new_window():
     windows = [
-        {"handle": "old"},
-        {"handle": "new-1"},
-        {"handle": "new-2"},
+        window_info("old"),
+        window_info("new-1"),
+        window_info("new-2"),
     ]
 
     assert launcher._new_window_handle(windows, {"old"}) == "new-2"
@@ -31,7 +39,7 @@ def test_new_window_handle_returns_last_new_window():
 
 def test_new_window_handle_returns_empty_when_none_is_new():
     assert launcher._new_window_handle(
-        [{"handle": "old"}, {"handle": ""}],
+        [window_info("old")],
         {"old"},
     ) == ""
 
@@ -40,9 +48,9 @@ def test_wait_for_window_prefers_pid_match(monkeypatch):
     process = SimpleNamespace(pid=123)
     list_windows = Mock(
         return_value=[
-            {"handle": "other", "pid": 10},
-            {"handle": "by-pid", "pid": 123},
-            {"handle": "newer", "pid": 20},
+            window_info("other", 10),
+            window_info("by-pid", 123),
+            window_info("newer", 20),
         ]
     )
     monkeypatch.setattr(launcher, "list_windows", list_windows)
@@ -58,7 +66,12 @@ def test_wait_for_window_detects_window_from_existing_app(monkeypatch):
     monkeypatch.setattr(
         launcher,
         "list_windows",
-        Mock(return_value=[{"handle": "old"}, {"handle": "forwarded"}]),
+        Mock(
+            return_value=[
+                window_info("old"),
+                window_info("forwarded"),
+            ]
+        ),
     )
 
     assert launcher._wait_for_window(process, {"old"}) == "forwarded"
@@ -68,11 +81,11 @@ def test_wait_for_window_polls_until_window_appears(monkeypatch):
     process = SimpleNamespace(pid=123)
     list_windows = Mock(
         side_effect=[
-            [{"handle": "old", "pid": 10}],
-            [{"handle": "old", "pid": 10}],
+            [window_info("old", 10)],
+            [window_info("old", 10)],
             [
-                {"handle": "old", "pid": 10},
-                {"handle": "found", "pid": 123},
+                window_info("old", 10),
+                window_info("found", 123),
             ],
         ]
     )
@@ -97,7 +110,12 @@ def test_wait_for_window_timeout_has_diagnostics(monkeypatch):
     monkeypatch.setattr(
         launcher,
         "list_windows",
-        Mock(return_value=[{"handle": "old"}, {"handle": "late"}]),
+        Mock(
+            return_value=[
+                window_info("old"),
+                window_info("late"),
+            ]
+        ),
     )
 
     with pytest.raises(RuntimeError) as error:
@@ -118,7 +136,7 @@ def test_launch_window_starts_and_arranges_application(monkeypatch, tmp_path):
     monkeypatch.setattr(
         launcher,
         "list_windows",
-        Mock(return_value=[{"handle": "existing"}]),
+        Mock(return_value=[window_info("existing")]),
     )
     monkeypatch.setattr(launcher.subprocess, "Popen", popen)
     monkeypatch.setattr(launcher, "_wait_for_window", wait)
@@ -161,7 +179,7 @@ def test_launch_window_runs_after_commands_only_after_arranging(
         Mock(
             side_effect=lambda: (
                 events.append("list")
-                or [{"handle": "existing"}]
+                or [window_info("existing")]
             )
         ),
     )

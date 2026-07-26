@@ -5,6 +5,7 @@ import pytest
 
 from src.backend import dispatcher
 from src.backend import kwin
+from src.backend.types import OutputInfo, WindowInfo
 from src.models import Window
 
 
@@ -30,14 +31,18 @@ def test_detect_window_manager_rejects_other_desktops(monkeypatch, desktop):
 
 
 def test_dispatcher_delegates_all_operations(monkeypatch):
+    window_info = WindowInfo(
+        handle="handle",
+        pid=123,
+    )
     backend = SimpleNamespace(
-        list_windows=Mock(return_value=[{"handle": "handle"}]),
+        list_windows=Mock(return_value=[window_info]),
         arrange_window=Mock(),
     )
     monkeypatch.setattr(dispatcher, "detect_window_manager", lambda: backend)
     window = Window(["kate"], None, "left")
 
-    assert dispatcher.list_windows() == [{"handle": "handle"}]
+    assert dispatcher.list_windows() == [window_info]
     dispatcher.arrange_window("handle", window, "center")
 
     backend.list_windows.assert_called_once_with()
@@ -45,7 +50,14 @@ def test_dispatcher_delegates_all_operations(monkeypatch):
 
 
 def test_arrange_window_moves_tiles_and_activates(monkeypatch):
-    output = {"name": "DP-1", "x": 0, "y": 0, "width": 1200, "height": 800}
+    output = OutputInfo(
+        name="DP-1",
+        x=0,
+        y=0,
+        width=1200,
+        height=800,
+        enabled=True,
+    )
     window = Window(["kate"], None, "left")
     operations = []
     monkeypatch.setattr(kwin, "list_outputs", lambda: [output])
@@ -81,7 +93,14 @@ def test_arrange_window_moves_tiles_and_activates(monkeypatch):
 
 
 def test_arrange_window_skips_quick_tile_for_custom_geometry(monkeypatch):
-    output = {"name": "DP-1", "x": 0, "y": 0, "width": 100, "height": 100}
+    output = OutputInfo(
+        name="DP-1",
+        x=0,
+        y=0,
+        width=100,
+        height=100,
+        enabled=True,
+    )
     window = Window(["kate"], None, [0.1, 0.2, 0.3, 0.4])
     move = Mock()
     quick_tile = Mock()
