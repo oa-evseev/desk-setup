@@ -228,27 +228,6 @@ function desktopOf(window) {
 }
 
 
-function findWindow(pid) {
-
-    const expectedPid = Number(pid);
-    const windows = windowList();
-
-    for (const window of windows) {
-
-        if (
-            Number(window.pid)
-            === expectedPid
-        ) {
-            return String(
-                window.internalId,
-            );
-        }
-    }
-
-    return "";
-}
-
-
 function listWindows() {
 
     const result = [];
@@ -359,18 +338,6 @@ function listOutputs() {
     }
 
     return result;
-}
-
-
-function getWindowGeometry(handle) {
-
-    const window = getWindow(handle);
-
-    if (!window) {
-        return null;
-    }
-
-    return geometryOf(window);
 }
 
 
@@ -643,20 +610,6 @@ function activateWindow(handle) {
 }
 
 
-function closeWindow(handle) {
-
-    const window = getWindow(handle);
-
-    if (!window) {
-        return false;
-    }
-
-    window.closeWindow();
-
-    return true;
-}
-
-
 function parametersOf(request) {
 
     if (
@@ -704,13 +657,6 @@ function dispatch(request) {
 
     switch (method) {
 
-        case "findWindow":
-
-            return findWindow(
-                params.pid,
-            );
-
-
         case "listWindows":
 
             return listWindows();
@@ -719,13 +665,6 @@ function dispatch(request) {
         case "listOutputs":
 
             return listOutputs();
-
-
-        case "getWindowGeometry":
-
-            return getWindowGeometry(
-                params.handle,
-            );
 
 
         case "moveResizeWindow":
@@ -745,13 +684,6 @@ function dispatch(request) {
         case "activateWindow":
 
             return activateWindow(
-                params.handle,
-            );
-
-
-        case "closeWindow":
-
-            return closeWindow(
                 params.handle,
             );
 

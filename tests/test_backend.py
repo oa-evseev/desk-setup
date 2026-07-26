@@ -15,7 +15,7 @@ from src.models import Window
 def test_detect_window_manager_recognises_kde(monkeypatch, desktop):
     monkeypatch.setenv("XDG_CURRENT_DESKTOP", desktop)
 
-    assert dispatcher.detect_window_manager() is dispatcher.kwin
+    assert dispatcher.detect_window_manager() is kwin
 
 
 @pytest.mark.parametrize("desktop", ["", "GNOME", "XFCE"])
@@ -31,18 +31,15 @@ def test_detect_window_manager_rejects_other_desktops(monkeypatch, desktop):
 
 def test_dispatcher_delegates_all_operations(monkeypatch):
     backend = SimpleNamespace(
-        find_window=Mock(return_value="handle"),
         list_windows=Mock(return_value=[{"handle": "handle"}]),
         arrange_window=Mock(),
     )
     monkeypatch.setattr(dispatcher, "detect_window_manager", lambda: backend)
     window = Window(["kate"], None, "left")
 
-    assert dispatcher.find_window(123) == "handle"
     assert dispatcher.list_windows() == [{"handle": "handle"}]
     dispatcher.arrange_window("handle", window, "center")
 
-    backend.find_window.assert_called_once_with(123)
     backend.list_windows.assert_called_once_with()
     backend.arrange_window.assert_called_once_with("handle", window, "center")
 
@@ -105,4 +102,3 @@ def test_arrange_window_skips_quick_tile_for_custom_geometry(monkeypatch):
     )
     quick_tile.assert_not_called()
     activate.assert_called_once_with("w1")
-

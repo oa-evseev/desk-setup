@@ -1,4 +1,4 @@
-.PHONY: help env install install-dev run fmt lint test clean
+.PHONY: help env install install-dev run test clean
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -9,8 +9,6 @@ PIP := $(VENV)/bin/pip
 help:
 	@echo "Available targets:"
 	@echo "  env    Create a development environment"
-	@echo "  fmt    Format source code"
-	@echo "  lint   Run linters"
 	@echo "  test   Run tests"
 	@echo "  clean  Remove temporary files"
 
@@ -27,10 +25,6 @@ install-dev:
 
 run:
 	$(PYTHON) -m src.main $(ARGS)
-
-fmt:
-
-lint:
 
 test:
 	$(PYTHON) -m pytest

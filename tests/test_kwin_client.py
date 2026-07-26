@@ -44,7 +44,7 @@ def test_run_qdbus_builds_command_and_strips_output(monkeypatch):
         )
     )
     monkeypatch.setattr(client.subprocess, "run", run)
-    monkeypatch.setattr(client, "QDBUS", "/bin/qdbus6")
+    monkeypatch.setattr(client, "_find_qdbus", lambda: "/bin/qdbus6")
 
     result = client._run_qdbus("service", "/path", "method", timeout=2.5)
 
@@ -173,7 +173,6 @@ def test_render_runtime_requires_every_marker(tmp_path, monkeypatch):
     [
         (client.list_windows, {}),
         (client.list_outputs, {}),
-        (client.get_window_geometry, []),
     ],
 )
 def test_public_read_methods_validate_response_type(
@@ -182,50 +181,20 @@ def test_public_read_methods_validate_response_type(
     monkeypatch.setattr(client, "call", Mock(return_value=result))
 
     with pytest.raises(RuntimeError, match="invalid"):
-        if function is client.get_window_geometry:
-            function("handle")
-        else:
-            function()
-
-
-def test_get_window_geometry_converts_fields_to_int(monkeypatch):
-    monkeypatch.setattr(
-        client,
-        "call",
-        Mock(
-            return_value={
-                "x": "1",
-                "y": 2.9,
-                "width": "300",
-                "height": 400,
-            }
-        ),
-    )
-
-    assert client.get_window_geometry("h") == {
-        "x": 1,
-        "y": 2,
-        "width": 300,
-        "height": 400,
-    }
+        function()
 
 
 def test_client_wrappers_build_expected_requests(monkeypatch):
-    call_mock = Mock(side_effect=[None, "42", 1, 0, "yes", ""])
+    call_mock = Mock(side_effect=[1, 0, "yes"])
     monkeypatch.setattr(client, "call", call_mock)
 
-    assert client.find_window(12) == ""
-    assert client.find_window(13) == "42"
     assert client.move_resize_window(
         "w", x=1, y=2, width=3, height=4
     ) is True
     assert client.quick_tile_window("w", "left") is False
     assert client.activate_window("w") is True
-    assert client.close_window("w") is False
 
     assert call_mock.call_args_list == [
-        call("findWindow", pid=12),
-        call("findWindow", pid=13),
         call(
             "moveResizeWindow",
             handle="w",
@@ -236,5 +205,4 @@ def test_client_wrappers_build_expected_requests(monkeypatch):
         ),
         call("quickTileWindow", handle="w", tile="left"),
         call("activateWindow", handle="w"),
-        call("closeWindow", handle="w"),
     ]

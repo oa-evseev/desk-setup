@@ -38,21 +38,23 @@ def test_new_window_handle_returns_empty_when_none_is_new():
 
 def test_wait_for_window_prefers_pid_match(monkeypatch):
     process = SimpleNamespace(pid=123)
-    find_window = Mock(return_value="by-pid")
-    list_windows = Mock()
-    monkeypatch.setattr(launcher, "find_window", find_window)
+    list_windows = Mock(
+        return_value=[
+            {"handle": "other", "pid": 10},
+            {"handle": "by-pid", "pid": 123},
+            {"handle": "newer", "pid": 20},
+        ]
+    )
     monkeypatch.setattr(launcher, "list_windows", list_windows)
 
     result = launcher._wait_for_window(process, {"old"})
 
     assert result == "by-pid"
-    find_window.assert_called_once_with(123)
-    list_windows.assert_not_called()
+    list_windows.assert_called_once_with()
 
 
 def test_wait_for_window_detects_window_from_existing_app(monkeypatch):
     process = SimpleNamespace(pid=123)
-    monkeypatch.setattr(launcher, "find_window", Mock(return_value=""))
     monkeypatch.setattr(
         launcher,
         "list_windows",
@@ -64,18 +66,24 @@ def test_wait_for_window_detects_window_from_existing_app(monkeypatch):
 
 def test_wait_for_window_polls_until_window_appears(monkeypatch):
     process = SimpleNamespace(pid=123)
-    find_window = Mock(side_effect=["", "", "found"])
-    list_windows = Mock(return_value=[{"handle": "old"}])
+    list_windows = Mock(
+        side_effect=[
+            [{"handle": "old", "pid": 10}],
+            [{"handle": "old", "pid": 10}],
+            [
+                {"handle": "old", "pid": 10},
+                {"handle": "found", "pid": 123},
+            ],
+        ]
+    )
     sleep = Mock()
-    monkeypatch.setattr(launcher, "find_window", find_window)
     monkeypatch.setattr(launcher, "list_windows", list_windows)
     monkeypatch.setattr(launcher.time, "sleep", sleep)
 
     result = launcher._wait_for_window(process, {"old"})
 
     assert result == "found"
-    assert find_window.call_count == 3
-    assert list_windows.call_count == 2
+    assert list_windows.call_count == 3
     assert sleep.call_args_list == [
         call(launcher._POLL_INTERVAL),
         call(launcher._POLL_INTERVAL),

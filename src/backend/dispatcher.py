@@ -1,17 +1,6 @@
 import os
 from typing import Any
 
-from . import kwin
-
-
-def find_window(
-    pid: int,
-) -> str:
-
-    wm = detect_window_manager()
-
-    return wm.find_window(pid)
-
 
 def list_windows() -> list[dict[str, Any]]:
 
@@ -43,6 +32,8 @@ def detect_window_manager():
     ).lower()
 
     if "kde" in session:
+        from . import kwin
+
         return kwin
 
     raise NotImplementedError(

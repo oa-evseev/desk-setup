@@ -52,9 +52,6 @@ def _find_qdbus() -> str:
     )
 
 
-QDBUS = _find_qdbus()
-
-
 def _run_qdbus(
     *arguments: str,
     timeout: float = DEFAULT_TIMEOUT,
@@ -62,7 +59,7 @@ def _run_qdbus(
     try:
         completed = subprocess.run(
             [
-                QDBUS,
+                _find_qdbus(),
                 *arguments,
             ],
             check=True,
@@ -541,20 +538,6 @@ def call(
     )
 
 
-def find_window(
-    pid: int,
-) -> str:
-    result = call(
-        "findWindow",
-        pid=int(pid),
-    )
-
-    if result is None:
-        return ""
-
-    return str(result)
-
-
 def list_windows() -> list[dict[str, Any]]:
     result = call(
         "listWindows",
@@ -579,30 +562,6 @@ def list_outputs() -> list[dict[str, Any]]:
         )
 
     return result
-
-
-def get_window_geometry(
-    window_handle: str,
-) -> dict[str, int] | None:
-    result = call(
-        "getWindowGeometry",
-        handle=str(window_handle),
-    )
-
-    if result is None:
-        return None
-
-    if not isinstance(result, dict):
-        raise RuntimeError(
-            "KWin returned invalid window geometry"
-        )
-
-    return {
-        "x": int(result["x"]),
-        "y": int(result["y"]),
-        "width": int(result["width"]),
-        "height": int(result["height"]),
-    }
 
 
 def move_resize_window(
@@ -649,23 +608,9 @@ def activate_window(
     )
 
 
-def close_window(
-    window_handle: str,
-) -> bool:
-    return bool(
-        call(
-            "closeWindow",
-            handle=str(window_handle),
-        )
-    )
-
-
 __all__ = [
     "activate_window",
     "call",
-    "close_window",
-    "find_window",
-    "get_window_geometry",
     "list_outputs",
     "list_windows",
     "move_resize_window",

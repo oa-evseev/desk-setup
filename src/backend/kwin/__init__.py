@@ -2,7 +2,6 @@ from typing import Any
 
 from .client import (
     activate_window,
-    find_window,
     list_outputs,
     list_windows,
     move_resize_window,
@@ -62,7 +61,6 @@ __all__ = [
     "arrange_window",
     "calculate_geometry",
     "find_output",
-    "find_window",
     "get_quick_tile",
     "list_outputs",
     "list_windows",

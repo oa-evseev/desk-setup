@@ -1,8 +1,31 @@
+import os
 from pathlib import Path
+import subprocess
+import sys
 from unittest.mock import Mock
 
 from src import main
 from src.models import Config, Monitor, Window
+
+
+def test_list_does_not_require_qdbus(tmp_path):
+    config_dir = tmp_path / "config" / "desk-setup"
+    config_dir.mkdir(parents=True)
+    (config_dir / "coding.yaml").write_text("", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["PATH"] = str(tmp_path / "empty-bin")
+    environment["XDG_CONFIG_HOME"] = str(tmp_path / "config")
+
+    result = subprocess.run(
+        [sys.executable, "-m", "src.main", "list"],
+        cwd=Path(__file__).resolve().parents[1],
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == "coding\n"
 
 
 def test_config_directory_uses_xdg_override(monkeypatch, tmp_path):

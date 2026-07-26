@@ -1,12 +1,13 @@
+from pathlib import Path
 import subprocess
 import time
 from typing import Any
 
 from .backend import (
     arrange_window,
-    find_window,
     list_windows,
 )
+from .models import Config, Window
 
 
 _WINDOW_TIMEOUT = 15.0
@@ -47,6 +48,21 @@ def _new_window_handle(
     return ""
 
 
+def _window_handle_for_pid(
+    windows: list[dict[str, Any]],
+    pid: int,
+) -> str:
+
+    for window in windows:
+
+        if window.get("pid") == pid:
+            return str(
+                window.get("handle", "")
+            )
+
+    return ""
+
+
 def _wait_for_window(
     process: subprocess.Popen,
     previous_handles: set[str],
@@ -59,20 +75,15 @@ def _wait_for_window(
 
     while time.monotonic() < deadline:
 
-        # Prefer the PID when the application creates
-        # a window in the newly launched process.
-        handle = find_window(
+        windows = list_windows()
+
+        handle = _window_handle_for_pid(
+            windows,
             process.pid,
         )
 
         if handle:
             return handle
-
-        # Applications such as Firefox may forward
-        # the request to an already running process.
-        # In that case, detect the newly created KWin
-        # window by its handle instead.
-        windows = list_windows()
 
         handle = _new_window_handle(
             windows,
@@ -105,8 +116,21 @@ def _wait_for_window(
     )
 
 
+def _start_process(
+    command: list[str],
+    cwd: Path | None,
+) -> subprocess.Popen:
+
+    return subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+
+
 def launch_window(
-    window,
+    window: Window,
     monitor_name: str,
 ) -> None:
 
@@ -116,11 +140,9 @@ def launch_window(
         windows_before,
     )
 
-    process = subprocess.Popen(
+    process = _start_process(
         window.exec,
-        cwd=window.cwd,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.STDOUT,
+        window.cwd,
     )
 
     window_handle = _wait_for_window(
@@ -136,19 +158,17 @@ def launch_window(
 
     for command in window.after:
 
-        subprocess.Popen(
+        _start_process(
             command.exec,
-            cwd=(
+            (
                 command.cwd
                 if command.cwd is not None
                 else window.cwd
             ),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT,
         )
 
 
-def launch(config) -> None:
+def launch(config: Config) -> None:
 
     for (
         monitor_name,
