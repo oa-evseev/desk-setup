@@ -4,7 +4,10 @@ import subprocess
 import sys
 from unittest.mock import Mock
 
+import pytest
+
 from src import main
+from src.config import ConfigError
 from src.models import Config, Monitor, Window
 
 
@@ -160,3 +163,23 @@ def test_main_without_command_prints_help(capsys, monkeypatch):
     output = capsys.readouterr().out
     assert "usage:" in output
     assert "apply" in output
+
+
+def test_main_reports_configuration_error_without_traceback(
+    capsys,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        main,
+        "cmd_apply",
+        Mock(side_effect=ConfigError("monitors.left must be a mapping")),
+    )
+    monkeypatch.setattr("sys.argv", ["desk-setup", "coding"])
+
+    with pytest.raises(SystemExit) as error:
+        main.main()
+
+    assert error.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "monitors.left must be a mapping" in stderr
+    assert "Traceback" not in stderr

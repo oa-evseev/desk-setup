@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import sys
 
-from .config import load_config
+from .config import ConfigError, load_config
 from .launcher import launch
 
 
@@ -119,18 +119,22 @@ def main() -> None:
 
     args = parser.parse_args(arguments)
 
-    match args.command:
+    try:
+        match args.command:
 
-        case "apply":
-            cmd_apply(
-                resolve_config_path(args.config)
-            )
+            case "apply":
+                cmd_apply(
+                    resolve_config_path(args.config)
+                )
 
-        case "list":
-            cmd_list()
+            case "list":
+                cmd_list()
 
-        case _:
-            parser.print_help()
+            case _:
+                parser.print_help()
+
+    except ConfigError as exc:
+        parser.error(str(exc))
 
 
 if __name__ == "__main__":

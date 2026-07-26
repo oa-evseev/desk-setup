@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from src.config import load_config
+from src.config import ConfigError, load_config
 
 
 def write_config(tmp_path: Path, content: str) -> Path:
@@ -122,8 +122,7 @@ monitors:
     assert window.after == []
 
 
-@pytest.mark.parametrize("missing_key", ["exec"])
-def test_after_command_requires_exec(tmp_path, missing_key):
+def test_after_command_requires_exec(tmp_path):
     path = write_config(
         tmp_path,
         """
@@ -138,7 +137,10 @@ monitors:
 """,
     )
 
-    with pytest.raises(KeyError, match=missing_key):
+    with pytest.raises(
+        ConfigError,
+        match=r"monitors\.center\.windows\[0\]\.after\[0\]\.exec",
+    ):
         load_config(path)
 
 
@@ -156,8 +158,8 @@ def test_rejects_non_mapping_document(tmp_path, content):
     path = write_config(tmp_path, content)
 
     with pytest.raises(
-        ValueError,
-        match="Configuration must be a mapping",
+        ConfigError,
+        match="configuration must be a mapping",
     ):
         load_config(path)
 
@@ -195,19 +197,120 @@ def test_rejects_unsupported_version(tmp_path, version):
 def test_required_fields_are_required(tmp_path, content, missing_key):
     path = write_config(tmp_path, content)
 
-    with pytest.raises(KeyError, match=missing_key):
+    with pytest.raises(ConfigError, match=missing_key):
         load_config(path)
 
 
-def test_yaml_syntax_error_is_propagated(tmp_path):
+def test_yaml_syntax_error_is_reported_as_config_error(tmp_path):
     path = write_config(tmp_path, "version: [1\n")
 
-    with pytest.raises(Exception) as error:
+    with pytest.raises(ConfigError, match="Invalid YAML"):
         load_config(path)
 
-    assert error.type.__module__.startswith("yaml")
 
-
-def test_missing_file_is_reported_by_pathlib(tmp_path):
-    with pytest.raises(FileNotFoundError):
+def test_missing_file_is_reported_as_config_error(tmp_path):
+    with pytest.raises(ConfigError, match="Could not read configuration"):
         load_config(tmp_path / "missing.yaml")
+
+
+@pytest.mark.parametrize(
+    ("fragment", "expected_path"),
+    [
+        ("monitors: []", "monitors"),
+        ("monitors:\n  left: null", "monitors.left"),
+        (
+            "monitors:\n  left:\n    windows: {}",
+            "monitors.left.windows",
+        ),
+        (
+            "monitors:\n  left:\n    windows:\n      - null",
+            r"monitors.left.windows\[0\]",
+        ),
+        (
+            "monitors:\n  left:\n    windows:\n"
+            "      - exec: firefox\n        tile: left",
+            r"monitors.left.windows\[0\].exec",
+        ),
+        (
+            "monitors:\n  left:\n    windows:\n"
+            "      - exec: []\n        tile: left",
+            r"monitors.left.windows\[0\].exec",
+        ),
+        (
+            "monitors:\n  left:\n    windows:\n"
+            "      - exec: [firefox, 123]\n        tile: left",
+            r"monitors.left.windows\[0\].exec",
+        ),
+        (
+            "monitors:\n  left:\n    windows:\n"
+            "      - exec: [firefox]\n        cwd: {}\n        tile: left",
+            r"monitors.left.windows\[0\].cwd",
+        ),
+        (
+            "monitors:\n  left:\n    windows:\n"
+            "      - exec: [firefox]\n        tile: null",
+            r"monitors.left.windows\[0\].tile",
+        ),
+        (
+            "monitors:\n  left:\n    windows:\n"
+            "      - exec: [firefox]\n        tile: left\n        after: {}",
+            r"monitors.left.windows\[0\].after",
+        ),
+    ],
+)
+def test_invalid_nested_types_include_field_path(
+    tmp_path,
+    fragment,
+    expected_path,
+):
+    path = write_config(
+        tmp_path,
+        f"version: 1\n{fragment}\n",
+    )
+
+    with pytest.raises(ConfigError, match=expected_path):
+        load_config(path)
+
+
+@pytest.mark.parametrize(
+    "tile",
+    [
+        "[0, 0, 0.5, 1]",
+        "{x: 0, y: 0, width: 0.5, height: 1}",
+    ],
+)
+def test_loads_structured_tile_geometry(tmp_path, tile):
+    path = write_config(
+        tmp_path,
+        "version: 1\n"
+        "monitors:\n"
+        "  left:\n"
+        "    windows:\n"
+        "      - exec: [kate]\n"
+        f"        tile: {tile}\n",
+    )
+
+    window = load_config(path).monitors["left"].windows[0]
+
+    assert window.tile is not None
+
+
+def test_rejects_unknown_fields_with_exact_path(tmp_path):
+    path = write_config(
+        tmp_path,
+        """
+version: 1
+monitors:
+  left:
+    windows:
+      - exec: [kate]
+        title: editor
+        tile: left
+""",
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"monitors\.left\.windows\[0\]\.title.*unknown",
+    ):
+        load_config(path)

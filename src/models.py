@@ -2,6 +2,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+Number = int | float
+Tile = (
+    str
+    | list[Number]
+    | dict[str, Number]
+)
+
+
 @dataclass(slots=True)
 class Command:
     exec: list[str]
@@ -12,7 +20,7 @@ class Command:
 class Window:
     exec: list[str]
     cwd: Path | None
-    tile: str
+    tile: Tile
     after: list[Command] = field(
         default_factory=list,
     )
