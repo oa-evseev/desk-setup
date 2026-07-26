@@ -150,20 +150,23 @@ def _stop_script(
 class _ReplyInterface(ServiceInterface):
     def __init__(
         self,
-        replies: queue.Queue[str],
+        results: queue.Queue[
+            str | BaseException
+        ],
     ) -> None:
         super().__init__(REPLY_INTERFACE)
 
-        self._replies = replies
+        self._results = results
 
     @method()
     def Reply(
         self,
         payload: "s",
     ) -> "b":
-        self._replies.put(payload)
+        self._results.put(payload)
 
         return True
+
 
 class _ReplyServer:
     def __init__(
@@ -174,8 +177,10 @@ class _ReplyServer:
         self.service_name = service_name
         self.object_path = object_path
 
-        self._replies: queue.Queue[str] = (
-            queue.Queue(maxsize=1)
+        self._results: queue.Queue[
+            str | BaseException
+        ] = (
+            queue.Queue()
         )
 
         self._startup: queue.Queue[
@@ -187,6 +192,9 @@ class _ReplyServer:
         ) = None
 
         self._stop_event: asyncio.Event | None = None
+
+        self._startup_reported = threading.Event()
+        self._stop_requested = threading.Event()
 
         self._thread = threading.Thread(
             target=self._thread_main,
@@ -205,7 +213,17 @@ class _ReplyServer:
         exc_value,
         traceback,
     ) -> None:
-        self.stop()
+        try:
+            self.stop()
+
+        except RuntimeError as stop_error:
+            if exc_value is None:
+                raise
+
+            exc_value.add_note(
+                "The D-Bus reply service also "
+                f"failed to stop: {stop_error}"
+            )
 
     def start(self) -> None:
         self._thread.start()
@@ -216,6 +234,16 @@ class _ReplyServer:
             )
 
         except queue.Empty as exc:
+            try:
+                self.stop()
+
+            except RuntimeError as stop_error:
+                raise RuntimeError(
+                    "Timed out while starting the "
+                    "temporary D-Bus reply service; "
+                    "its thread did not stop"
+                ) from stop_error
+
             raise RuntimeError(
                 "Timed out while starting the "
                 "temporary D-Bus reply service"
@@ -228,6 +256,8 @@ class _ReplyServer:
             ) from result
 
     def stop(self) -> None:
+        self._stop_requested.set()
+
         loop = self._loop
         stop_event = self._stop_event
 
@@ -245,12 +275,18 @@ class _ReplyServer:
                 timeout=DEFAULT_TIMEOUT,
             )
 
+        if self._thread.is_alive():
+            raise RuntimeError(
+                "The temporary D-Bus reply "
+                "service thread did not stop"
+            )
+
     def receive(
         self,
         timeout: float,
     ) -> str:
         try:
-            return self._replies.get(
+            result = self._results.get(
                 timeout=timeout,
             )
 
@@ -260,6 +296,14 @@ class _ReplyServer:
                 "KWin script reply"
             ) from exc
 
+        if isinstance(result, BaseException):
+            raise RuntimeError(
+                "The temporary D-Bus reply "
+                "service failed"
+            ) from result
+
+        return result
+
     def _thread_main(self) -> None:
         try:
             asyncio.run(
@@ -267,16 +311,21 @@ class _ReplyServer:
             )
 
         except BaseException as exc:
-            try:
-                self._startup.put_nowait(exc)
+            if self._startup_reported.is_set():
+                self._results.put(exc)
+            else:
+                self._report_startup(exc)
 
-            except queue.Full:
-                pass
+    def _report_startup(
+        self,
+        result: BaseException | None,
+    ) -> None:
+        self._startup_reported.set()
+        self._startup.put(result)
 
     async def _serve(self) -> None:
         bus = None
         exported = False
-        startup_reported = False
 
         try:
             bus = await MessageBus(
@@ -288,7 +337,7 @@ class _ReplyServer:
             )
 
             interface = _ReplyInterface(
-                self._replies
+                self._results
             )
 
             bus.export(
@@ -304,18 +353,12 @@ class _ReplyServer:
 
             self._stop_event = asyncio.Event()
 
-            self._startup.put(None)
-            startup_reported = True
+            self._report_startup(None)
+
+            if self._stop_requested.is_set():
+                self._stop_event.set()
 
             await self._stop_event.wait()
-
-        except BaseException as exc:
-            if not startup_reported:
-                self._startup.put(exc)
-                startup_reported = True
-
-            else:
-                raise
 
         finally:
             if bus is not None:
@@ -433,6 +476,66 @@ def _render_runtime(
 
     return source
 
+
+def _run_loaded_script(
+    script_path: Path,
+    plugin_name: str,
+    reply_server: _ReplyServer,
+) -> str:
+    script_id = _load_script(
+        script_path,
+        plugin_name,
+    )
+
+    try:
+        _run_script(script_id)
+
+        return reply_server.receive(
+            timeout=DEFAULT_TIMEOUT,
+        )
+
+    finally:
+        _stop_script(script_id)
+
+
+def _parse_response(
+    payload: str,
+) -> Any:
+    try:
+        response = json.loads(payload)
+
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "KWin returned invalid JSON: "
+            f"{payload!r}"
+        ) from exc
+
+    if not isinstance(response, dict):
+        raise RuntimeError(
+            "KWin returned an invalid response: "
+            f"{response!r}"
+        )
+
+    if response.get("ok") is not True:
+        error = response.get(
+            "error",
+            "Unknown KWin script error",
+        )
+
+        stack = response.get("stack")
+
+        if stack:
+            raise RuntimeError(
+                f"{error}\n{stack}"
+            )
+
+        raise RuntimeError(
+            str(error)
+        )
+
+    return response.get("result")
+
+
 def _execute(
     method_name: str,
     **parameters: Any,
@@ -478,54 +581,13 @@ def _execute(
             service_name,
             object_path,
         ) as reply_server:
-            script_id = _load_script(
+            payload = _run_loaded_script(
                 script_path,
                 plugin_name,
+                reply_server,
             )
 
-            try:
-                _run_script(script_id)
-
-                payload = reply_server.receive(
-                    timeout=DEFAULT_TIMEOUT,
-                )
-
-            finally:
-                _stop_script(script_id)
-
-    try:
-        response = json.loads(payload)
-
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            "KWin returned invalid JSON: "
-            f"{payload!r}"
-        ) from exc
-
-    if not isinstance(response, dict):
-        raise RuntimeError(
-            "KWin returned an invalid response: "
-            f"{response!r}"
-        )
-
-    if response.get("ok") is not True:
-        error = response.get(
-            "error",
-            "Unknown KWin script error",
-        )
-
-        stack = response.get("stack")
-
-        if stack:
-            raise RuntimeError(
-                f"{error}\n{stack}"
-            )
-
-        raise RuntimeError(
-            str(error)
-        )
-
-    return response.get("result")
+    return _parse_response(payload)
 
 
 def call(

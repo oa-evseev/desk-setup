@@ -1,4 +1,5 @@
 import json
+import queue
 import subprocess
 from unittest.mock import Mock
 
@@ -166,3 +167,115 @@ def test_render_runtime_requires_every_marker(tmp_path, monkeypatch):
             service_name="org.example",
             object_path="/org/example",
         )
+
+
+def test_reply_server_stops_after_startup_timeout(monkeypatch):
+    server = client._ReplyServer(
+        "org.example",
+        "/org/example",
+    )
+    server._thread = Mock()
+    server._startup = Mock(
+        get=Mock(side_effect=queue.Empty),
+    )
+    stop = Mock()
+    monkeypatch.setattr(server, "stop", stop)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Timed out while starting",
+    ):
+        server.start()
+
+    stop.assert_called_once_with()
+
+
+def test_reply_server_receive_surfaces_background_error():
+    server = client._ReplyServer(
+        "org.example",
+        "/org/example",
+    )
+    server._results.put(
+        RuntimeError("D-Bus connection lost")
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="reply service failed",
+    ) as error:
+        server.receive(timeout=0.1)
+
+    assert isinstance(
+        error.value.__cause__,
+        RuntimeError,
+    )
+    assert "D-Bus connection lost" in str(
+        error.value.__cause__
+    )
+
+
+def test_reply_server_stop_rejects_stuck_thread():
+    server = client._ReplyServer(
+        "org.example",
+        "/org/example",
+    )
+    server._thread = Mock()
+    server._thread.is_alive.return_value = True
+
+    with pytest.raises(
+        RuntimeError,
+        match="did not stop",
+    ):
+        server.stop()
+
+    server._thread.join.assert_called_once_with(
+        timeout=client.DEFAULT_TIMEOUT,
+    )
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ("not-json", "invalid JSON"),
+        ("[]", "invalid response"),
+        ('{"ok": false, "error": "broken"}', "broken"),
+        (
+            '{"ok": false, "error": "broken", "stack": "trace"}',
+            "broken\ntrace",
+        ),
+    ],
+)
+def test_parse_response_rejects_invalid_or_failed_replies(
+    payload,
+    message,
+):
+    with pytest.raises(RuntimeError, match=message):
+        client._parse_response(payload)
+
+
+def test_parse_response_returns_success_result():
+    assert client._parse_response(
+        '{"ok": true, "result": {"handle": "w1"}}'
+    ) == {"handle": "w1"}
+
+
+def test_run_loaded_script_always_stops_script(monkeypatch):
+    reply_server = Mock()
+    run = Mock(side_effect=RuntimeError("run failed"))
+    stop = Mock()
+    monkeypatch.setattr(
+        client,
+        "_load_script",
+        Mock(return_value=17),
+    )
+    monkeypatch.setattr(client, "_run_script", run)
+    monkeypatch.setattr(client, "_stop_script", stop)
+
+    with pytest.raises(RuntimeError, match="run failed"):
+        client._run_loaded_script(
+            client.Path("/tmp/request.js"),
+            "plugin",
+            reply_server,
+        )
+
+    stop.assert_called_once_with(17)
